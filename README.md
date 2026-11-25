@@ -33,6 +33,10 @@ uv run --locked python -m etl.pipeline --source /absolute/path/to/olist-csvs --o
 
 The CLI expects a **complete extract**, including headers for empty relations. `OLIST_SOURCE_DIR` and `RETAIL_OUTPUT_DIR` can be set in the shell as defaults. Freshness, alert and reconciliation thresholds are in [warehouse.yml](configs/warehouse.yml). Successful runs report the version, database, and quality report path. See [Architecture](docs/architecture.md) for recovery and incremental semantics.
 
+## Phase 1B Retail Analyst
+
+Run the Datus-powered fixture evaluation with `bash agents/evaluate_retail.sh`. A live analyst session requires model credentials. See [Retail Analyst runbook](docs/retail_analyst.md) for both paths and the machine-readable evaluation report.
+
 ## Repository guide
 
 - [Business requirements](docs/business_requirements.md) and [metric dictionary](docs/metric_dictionary.md)

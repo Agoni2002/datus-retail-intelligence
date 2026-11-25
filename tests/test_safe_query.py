@@ -92,3 +92,36 @@ def test_benchmark_sql_is_executable(built, case):
     result = query(db, case["sql"])
     actual = [[float(value) if isinstance(value, Decimal) else value for value in row] for row in result["rows"]]
     assert actual == case["expected"]
+
+
+def test_guard_allows_dosi_monthly_projection(built):
+    _, _, db = built
+    result = query(db, """
+        SELECT DATE_TRUNC('MONTH', sales_daily.purchase_date) AS month_start,
+               SUM(sales_daily.delivered_gmv_brl) AS delivered_gmv
+        FROM dws.dws_sales_daily AS sales_daily
+        GROUP BY DATE_TRUNC('MONTH', sales_daily.purchase_date)
+        ORDER BY month_start
+    """)
+    assert [money for _, money in result["rows"]] == [Decimal("200.00"), Decimal("80.00")]
+
+
+def test_guard_exposes_stable_codes_without_echoing_input(built):
+    _, _, db = built
+    with pytest.raises(UnsafeQuery) as denied:
+        query(db, "SELECT * FROM read_csv_auto('/fixture-private-filename.csv')")
+    assert denied.value.code == "TABLE_NOT_ALLOWED"
+    assert "fixture-private-filename" not in str(denied.value)
+
+
+def test_guard_date_truncation_rejects_unapproved_unit(built):
+    _, _, db = built
+    with pytest.raises(UnsafeQuery, match="Only MONTH"):
+        query(db, "SELECT DATE_TRUNC('YEAR', purchase_date) FROM dws.dws_sales_daily")
+
+
+def test_guard_enforces_query_deadline(built):
+    _, _, db = built
+    with pytest.raises(UnsafeQuery) as denied:
+        query(db, Q, replace(Limits(), timeout_seconds=0.000000001))
+    assert denied.value.code == "QUERY_TIMEOUT"

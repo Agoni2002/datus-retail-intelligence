@@ -32,7 +32,7 @@ NODES = frozenset("""
     Where Group Having Order Ordered Limit Distinct Filter
     EQ NEQ GT GTE LT LTE Is In Between Like And Or Not Paren
     Add Sub Mul Div Mod Neg Case If
-    Cast DataType DataTypeParam Count Sum Avg Min Max Round Abs Coalesce Nullif
+    TimestampTrunc Var Cast DataType DataTypeParam Count Sum Avg Min Max Round Abs Coalesce Nullif
 """.split())
 SCALAR_TYPES = frozenset({"DATE", "TIMESTAMP", "INT", "BIGINT", "DOUBLE", "DECIMAL", "BOOLEAN", "VARCHAR"})
 SCANS = frozenset({"SEQ_SCAN", "COLUMN_DATA_SCAN"})
@@ -41,7 +41,9 @@ WRAPPERS = frozenset({"PROJECTION", "UNGROUPED_AGGREGATE", "ORDER_BY", "TOP_N", 
 
 
 class UnsafeQuery(ValueError):
-    pass
+    def __init__(self, message: str, code: str = "INVALID_SQL"):
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -81,16 +83,21 @@ def validate_sql(sql: str, limits: Limits) -> tuple[str, str, str]:
     tables = list(statement.find_all(exp.Table))
     if (len(tables) != 1 or not isinstance(table.this, exp.Identifier) or table.catalog
             or (table.db.lower(), table.name.lower()) not in APPROVED):
-        raise UnsafeQuery("Query must select from one schema-qualified approved table")
+        raise UnsafeQuery("Query must select from one schema-qualified approved table", "TABLE_NOT_ALLOWED")
     for node in nodes:
         if type(node).__name__ not in NODES or isinstance(node, exp.DataType) and node.this.value not in SCALAR_TYPES:
             raise UnsafeQuery(f"Unsupported SQL expression: {type(node).__name__}")
+        if isinstance(node, exp.Var) and (
+            not isinstance(node.parent, exp.TimestampTrunc) or node.parent.args.get("unit") != node
+            or node.name.upper() != "MONTH"
+        ):
+            raise UnsafeQuery("Only MONTH is supported for date truncation")
     limit = statement.args.get("limit")
     if limit is not None:
         value = limit.expression
         if (not isinstance(value, exp.Literal) or not value.is_int or
                 not 0 <= int(value.this) <= limits.result_rows):
-            raise UnsafeQuery("LIMIT must be a literal within the result row limit")
+            raise UnsafeQuery("LIMIT must be a literal within the result row limit", "RESULT_LIMIT")
     else:
         statement = statement.limit(limits.result_rows + 1)
     # Bind DuckDB to the parsed statement itself. Original comments, ambiguous
@@ -131,7 +138,7 @@ def estimated_rows(raw_plan: str) -> int:
             pending.extend(children)
         return highest
     except (ValueError, TypeError, KeyError, RecursionError) as error:
-        raise UnsafeQuery("DuckDB cardinality cannot be established from this plan") from error
+        raise UnsafeQuery("DuckDB cardinality cannot be established from this plan", "PLAN_UNRECOGNIZED") from error
 
 
 def query(snapshot: Path, sql: str, limits: Limits = Limits()):
@@ -155,19 +162,19 @@ def query(snapshot: Path, sql: str, limits: Limits = Limits()):
             if len(sizes) != 1 or sizes[0][0] is None or sizes[0][0] < 0:
                 raise UnsafeQuery("Approved source must be a materialized table with known size")
             if sizes[0][0] > limits.plan_rows:
-                raise UnsafeQuery("Base table cardinality exceeds the plan row limit")
+                raise UnsafeQuery("Base table cardinality exceeds the plan row limit", "COST_LIMIT")
             plan = conn.execute(f"EXPLAIN (FORMAT JSON) {statement}").fetchall()
             if len(plan) != 1 or plan[0][0] != "physical_plan":
-                raise UnsafeQuery("DuckDB did not return a physical plan")
+                raise UnsafeQuery("DuckDB did not return a physical plan", "PLAN_UNRECOGNIZED")
             if estimated_rows(plan[0][1]) > limits.plan_rows:
-                raise UnsafeQuery("Estimated operator cardinality exceeds the plan row limit")
+                raise UnsafeQuery("Estimated operator cardinality exceeds the plan row limit", "COST_LIMIT")
             if monotonic() >= deadline:
-                raise UnsafeQuery("Query planning exceeded the time limit")
+                raise UnsafeQuery("Query planning exceeded the time limit", "QUERY_TIMEOUT")
             result = conn.execute(statement)
             columns = [item[0] for item in result.description]
             size = len(json.dumps(columns, default=str, ensure_ascii=False).encode()) + 40
             if size > limits.result_bytes:
-                raise UnsafeQuery("Result exceeds the byte limit")
+                raise UnsafeQuery("Result exceeds the byte limit", "RESULT_LIMIT")
             rows = []
             while (row := result.fetchone()) is not None:
                 try:
@@ -176,11 +183,13 @@ def query(snapshot: Path, sql: str, limits: Limits = Limits()):
                     raise UnsafeQuery("Query returned a non-finite result") from error
                 size += len(encoded.encode()) + 2
                 if len(rows) >= limits.result_rows or size > limits.result_bytes:
-                    raise UnsafeQuery("Result exceeds the row or byte limit; narrow the query")
+                    raise UnsafeQuery("Result exceeds the row or byte limit; narrow the query", "RESULT_LIMIT")
                 rows.append(row)
             if monotonic() >= deadline:
-                raise UnsafeQuery("Query execution exceeded the time limit")
+                raise UnsafeQuery("Query execution exceeded the time limit", "QUERY_TIMEOUT")
             return {"columns": columns, "rows": rows}
+        except duckdb.InterruptException as error:
+            raise UnsafeQuery("Query execution exceeded the time limit", "QUERY_TIMEOUT") from error
         except duckdb.Error as error:
             raise UnsafeQuery("DuckDB could not safely plan or execute the query") from error
         finally:

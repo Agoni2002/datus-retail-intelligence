@@ -1,5 +1,7 @@
 # Retail integration with Datus 0.4.3
 
+The [Phase 1B Retail Analyst runbook](../docs/retail_analyst.md) documents the restricted launch path, registered tools and evaluation. The Phase 1A datasource smoke and native Datus Knowledge Base setup below remain useful for trusted operator work.
+
 This companion uses the editable Datus checkout at `/home/userz/Projects/Datus-agent`, commit `be4b714d385ad87968e867182db27281078a03a5`. Its CLI and configuration were inspected before integration. Datus dependencies stay in the existing virtual environment. The project guard runs in the retail virtual environment.
 
 ## Datasource and verification
@@ -42,7 +44,7 @@ cp agents/semantic/retail_fulfillment.yml subject/semantic_models/retail/
 
 This commit documents `sync-yaml` for republishing the metric and semantic dataset projections without generating a new model. For the first metadata index on a curated serving datasource, set `kb.search.mode: fts` in the base config and run the existing batch CLI with `--components metadata --kb_update_strategy overwrite`. The later refresh strategy is `incremental`. The `--kb_search_mode fts` flag overrides the mode for one invocation. Review descriptions, sampled values, and reference SQL before indexing. Vector mode needs an embedding runtime. Knowledge Base synchronization and indexing are prepared here for Phase 1B. The Phase 1A smoke exercises schema validation, compile and execution directly.
 
-[The project Skill](../.datus/skills/retail-metrics/SKILL.md) defines the business usage guidance. For a later custom analyst use the `/agent` or `/subagent` wizard and a `gen_sql` style with scoped tables/metrics/reference SQL. Select the guarded MCP tool once it is registered. With that configuration, use the tool's scope as an additional routing filter and reserve the base connector for trusted execution. Subagent context filters and prompt guidance are not an authorization boundary. The release provides the local SQL interface for wrapping in an MCP tool and leaves the actual Subagent registration to Phase 1B. The name and tool below are planned identifiers to use after the MCP tool exists.
+[The project Skill](../.datus/skills/retail-metrics/SKILL.md) defines the business usage guidance. For a later custom analyst use the `/agent` or `/subagent` wizard and a `gen_sql` style with scoped tables/metrics/reference SQL. Select the guarded MCP tool once it is registered. With that configuration, use the tool's scope as an additional routing filter and reserve the base connector for trusted execution. Subagent context filters and prompt guidance are not an authorization boundary. The live companion launcher now registers its own restricted MCP and Subagent configuration. The snippet below documents the original manual authoring shape for a separately managed Datus installation.
 
 ```yaml
 agent:
@@ -74,4 +76,4 @@ uv run --locked python -m retail_agents.safe_query --output data/processed/fixtu
   "SELECT month_start, delivered_gmv_brl FROM ads.ads_executive_dashboard ORDER BY month_start"
 ```
 
-Datus supports a registered plugin `policy_runtime` for applicable SQL reads, and `tool_transformers` for LLM-driven calls. A transformer alone does not cover direct Python or other execution paths. No plugin is installed or activated in Phase 1A. Before serving untrusted agents, expose only the guarded tool and test for access through native SQL, filesystem, shell, and Dosi routes. If native artifact queries must have the same cost guarantee, a separate Datus change should use supported DuckDB JSON `EXPLAIN` fields, handle unknown plans according to explicit policy, and add tests with the pinned engine and actual guarded call sites.
+Datus supports a registered plugin `policy_runtime` for applicable SQL reads, and `tool_transformers` for LLM-driven calls. A transformer alone does not cover direct Python or other execution paths. The companion uses stdio MCP and does not install or activate a plugin. Its dedicated launcher verifies the restricted SDK tool surface. Other Datus launches require their own tool and permission verification. If native artifact queries must have the same cost guarantee, a separate Datus change should use supported DuckDB JSON `EXPLAIN` fields, handle unknown plans according to explicit policy, and add tests with the pinned engine and actual guarded call sites.

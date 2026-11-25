@@ -1,0 +1,29 @@
+# The companion launcher injects an isolated home and one scoped stdio MCP server.
+agent:
+  config_mutable: false
+  bash:
+    enabled: false
+  filesystem:
+    strict: true
+  permissions:
+    profile: normal
+    default: deny
+    rules:
+      - {tool: "*", pattern: "*", permission: deny}
+      - {tool: "mcp.retail", pattern: retail_context, permission: allow}
+      - {tool: "mcp.retail", pattern: retail_query, permission: allow}
+      - {tool: "mcp.retail", pattern: retail_metric, permission: allow}
+    sql_statements: {read: deny, write: deny, destructive: deny, unknown: deny}
+  agentic_nodes:
+    retail_analyst:
+      node_class: gen_sql
+      system_prompt: retail_analyst
+      prompt_version: "1.0"
+      max_turns: 12
+      agent_description: Answer sourced retail sales, seller, customer and fulfillment questions.
+      tools: date_parsing_tools.parse_temporal_expressions
+      mcp: retail
+      skills: retail-metrics
+      scoped_context:
+        datasource: retail
+        tables: ads.ads_executive_dashboard, ads.ads_seller_scorecard, ads.ads_sales_anomaly, ads.ads_sales_category_movement, ads.ads_delivery_alerts, dws.dws_sales_daily, dws.dws_category_performance, dws.dws_delivery_performance
