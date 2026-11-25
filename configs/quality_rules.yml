@@ -1,0 +1,8 @@
+# Stable quality report families. Runtime thresholds live in warehouse.yml.
+checks:
+  structural: [strict_csv_header, ods_schema, exact_integer_and_money_types, timestamp_year, finite_dimensions]
+  completeness: [required_identifiers, required_values, historical_freshness]
+  uniqueness: [raw_duplicate_key_rows, staged_unique, warehouse_primary_keys]
+  relational: [source_required_relationships, warehouse_foreign_keys]
+  business: [order_status, delivery_timeline, missing_delivery_fields, amounts, sequences, review_score, geography]
+  reconciliation: [ods_dwd_counts, payment_total, daily_sales, seller_scorecard, category_gmv, monthly_metrics, category_movement]

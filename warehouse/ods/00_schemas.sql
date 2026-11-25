@@ -1,0 +1,13 @@
+CREATE SCHEMA IF NOT EXISTS ods;
+CREATE SCHEMA IF NOT EXISTS dwd;
+CREATE SCHEMA IF NOT EXISTS dws;
+CREATE SCHEMA IF NOT EXISTS ads;
+CREATE SCHEMA IF NOT EXISTS control;
+
+CREATE TABLE IF NOT EXISTS control.source_watermark (
+    source_name VARCHAR PRIMARY KEY,
+    sha256 VARCHAR NOT NULL,
+    source_rows BIGINT NOT NULL,
+    event_watermark TIMESTAMP,
+    last_changed_version VARCHAR NOT NULL
+);

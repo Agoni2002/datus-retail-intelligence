@@ -1,0 +1,80 @@
+- id: jan-gmv
+  question: How much merchandise GMV was delivered for January 2018 orders?
+  metric: delivered_gmv
+  sql: SELECT delivered_gmv_brl FROM ads.ads_executive_dashboard WHERE month_start = DATE '2018-01-01'
+  expected: [[200.00]]
+- id: feb-delivered
+  question: How many February 2018 orders were delivered?
+  metric: delivered_order_count
+  sql: SELECT delivered_orders FROM ads.ads_executive_dashboard WHERE month_start = DATE '2018-02-01'
+  expected: [[1]]
+- id: feb-aov
+  question: What was the average merchandise order value in February 2018?
+  metric: average_order_value
+  sql: SELECT average_order_value_brl FROM ads.ads_executive_dashboard WHERE month_start = DATE '2018-02-01'
+  expected: [[80.00]]
+- id: jan-cancel
+  question: What fraction of January 2018 orders were canceled?
+  metric: cancellation_rate
+  sql: SELECT cancellation_rate FROM ads.ads_executive_dashboard WHERE month_start = DATE '2018-01-01'
+  expected: [[0.25]]
+- id: jan-on-time
+  question: What share of eligible January deliveries were on time?
+  metric: on_time_delivery_rate
+  sql: SELECT on_time_delivery_rate FROM ads.ads_executive_dashboard WHERE month_start = DATE '2018-01-01'
+  expected: [[0.5]]
+- id: jan-late-days
+  question: By how many days were late January deliveries late on average?
+  metric: average_late_delivery_days
+  sql: SELECT average_late_delivery_days FROM ads.ads_executive_dashboard WHERE month_start = DATE '2018-01-01'
+  expected: [[3.0]]
+- id: jan-freight
+  question: What freight was charged on delivered January orders?
+  metric: freight_revenue
+  sql: SELECT freight_revenue_brl FROM ads.ads_executive_dashboard WHERE month_start = DATE '2018-01-01'
+  expected: [[20.00]]
+- id: jan-review
+  question: What was the mean latest review score per reviewed January delivery?
+  metric: average_review_score
+  sql: SELECT average_review_score FROM ads.ads_executive_dashboard WHERE month_start = DATE '2018-01-01'
+  expected: [[4.0]]
+- id: jan-repeat
+  question: What fraction of January delivered customers bought at least twice that month?
+  metric: repeat_purchase_rate
+  sql: SELECT repeat_purchase_rate FROM ads.ads_executive_dashboard WHERE month_start = DATE '2018-01-01'
+  expected: [[0.5]]
+- id: jan-category
+  question: Which product category had the highest January delivered sales?
+  metric: category_sales
+  sql: SELECT category_name, category_sales_brl FROM dws.dws_category_performance WHERE month_start = DATE '2018-01-01' ORDER BY category_sales_brl DESC, category_code LIMIT 1
+  expected: [[electronics, 110.00]]
+- id: jan-seller
+  question: Which participating seller had the highest January cancellation rate?
+  metric: seller_performance
+  sql: SELECT seller_id, round(cancellation_rate, 4) FROM ads.ads_seller_scorecard WHERE month_start = DATE '2018-01-01' ORDER BY cancellation_rate DESC, seller_id LIMIT 1
+  expected: [[s1, 0.3333]]
+- id: feb-region
+  question: Which state crossed the February late-delivery alert threshold?
+  metric: on_time_delivery_rate
+  sql: SELECT state, late_delivery_rate FROM ads.ads_delivery_alerts WHERE month_start = DATE '2018-02-01' ORDER BY state
+  expected: [[RJ, 1.0]]
+- id: feb-anomaly
+  question: By how many reais and what fraction did February delivered GMV change versus January?
+  metric: delivered_gmv
+  sql: SELECT gmv_change_brl, gmv_change_rate, is_decline FROM ads.ads_sales_anomaly WHERE month_start = DATE '2018-02-01'
+  expected: [[-120.00, -0.6, true]]
+- id: feb-category-contribution
+  question: Which categories contributed to the February sales decrease and by how much?
+  metric: category_sales
+  sql: SELECT category_name, contribution_brl FROM ads.ads_sales_category_movement WHERE month_start = DATE '2018-02-01' AND contribution_brl < 0 ORDER BY contribution_brl, category_code
+  expected: [[home, -90.00], [electronics, -30.00]]
+- id: jan-unknown-delivery
+  question: How many January delivered orders were excluded from the on-time calculation?
+  metric: on_time_delivery_rate
+  sql: SELECT delivered_orders - delivery_eligible_orders FROM ads.ads_executive_dashboard WHERE month_start = DATE '2018-01-01'
+  expected: [[1]]
+- id: feb-seller-volume
+  question: How many February orders had seller s2, and how many of those were canceled?
+  metric: seller_performance
+  sql: SELECT seller_orders, canceled_orders FROM ads.ads_seller_scorecard WHERE month_start = DATE '2018-02-01' AND seller_id = 's2'
+  expected: [[2, 1]]

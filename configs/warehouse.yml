@@ -1,0 +1,12 @@
+memory_limit: 512MB
+threads: 2
+# A historical extract has no daily arrival SLA. Set as_of_date for audit replay.
+# When null, freshness checks compare component freshness against this extract.
+as_of_date: null
+max_order_age_days: 45
+max_source_lag_days: 45
+payment_tolerance_brl: 0.02
+payment_mismatch_severity: warning
+late_alert_min_orders: 1
+late_alert_rate: 0.25
+sales_decline_threshold: 0.10

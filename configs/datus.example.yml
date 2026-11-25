@@ -1,0 +1,23 @@
+# Run Datus from the companion repository root.
+# RETAIL_DUCKDB_PATH must be the absolute path of a published .duckdb file.
+agent:
+  home: ./.datus-runtime
+  filesystem:
+    strict: true
+  permissions:
+    profile: normal
+    sql_statements:
+      read: allow
+      write: deny
+      destructive: deny
+      unknown: deny
+  services:
+    datasources:
+      retail:
+        type: duckdb
+        uri: ${RETAIL_DUCKDB_PATH}
+        schema: ads
+        read_only: true
+        enable_external_access: false
+        memory_limit: 256MB
+        default: true

@@ -1,0 +1,16 @@
+[project]
+name = "datus-retail-intelligence"
+version = "0.1.0"
+description = "Reproducible Olist operations and fulfillment warehouse"
+requires-python = ">=3.12,<3.13"
+dependencies = ["duckdb==1.5.2", "PyYAML>=6.0,<7", "sqlglot==30.27.0"]
+
+[dependency-groups]
+dev = ["pytest>=8,<10"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

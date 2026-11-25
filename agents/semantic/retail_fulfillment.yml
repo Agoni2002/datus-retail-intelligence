@@ -1,0 +1,53 @@
+version: 0.2.0.dev0
+name: retail_fulfillment
+datasets:
+  - name: sales_daily
+    source: dws.dws_sales_daily
+    description: One row per Olist purchase date. Delivered amounts are in BRL.
+    primary_key: [purchase_date]
+    fields:
+      - name: purchase_date
+        expression:
+          dialects:
+            - dialect: DUCKDB
+              expression: purchase_date
+        dimension:
+          is_time: true
+        custom_extensions:
+          - vendor_name: DATUS
+            data: '{"v":"1.4","time_granularity":"day"}'
+      - name: delivered_gmv_brl
+        expression:
+          dialects:
+            - dialect: DUCKDB
+              expression: delivered_gmv_brl
+        description: Item merchandise value for orders with delivered status, excluding freight.
+      - name: delivered_orders
+        expression:
+          dialects:
+            - dialect: DUCKDB
+              expression: delivered_orders
+        description: Count of distinct delivered orders for the purchase date.
+    custom_extensions:
+      - vendor_name: DATUS
+        data: '{"v":"1.4","time_dimension":"purchase_date"}'
+relationships: []
+metrics:
+  - name: delivered_gmv
+    expression:
+      dialects:
+        - dialect: DUCKDB
+          expression: SUM(sales_daily.delivered_gmv_brl)
+    description: Merchandise GMV excluding freight for orders with delivered status.
+    custom_extensions:
+      - vendor_name: DATUS
+        data: '{"v":"1.4","time_dimension":"sales_daily.purchase_date","subject_path":["retail","sales","gmv"],"unit":"BRL"}'
+  - name: delivered_order_count
+    expression:
+      dialects:
+        - dialect: DUCKDB
+          expression: SUM(sales_daily.delivered_orders)
+    description: Count of unique delivered orders, using order purchase date.
+    custom_extensions:
+      - vendor_name: DATUS
+        data: '{"v":"1.4","time_dimension":"sales_daily.purchase_date","subject_path":["retail","fulfillment","delivered_orders"],"unit":"orders"}'

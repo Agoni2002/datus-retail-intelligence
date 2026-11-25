@@ -1,0 +1,124 @@
+currency: BRL
+reporting_period: purchase calendar month
+metrics:
+  delivered_gmv:
+    meaning: Merchandise value fulfilled on orders marked delivered.
+    formula: Sum of item sale prices grouped to order before aggregation.
+    numerator: Delivered merchandise value in BRL.
+    denominator: None.
+    time_dimension: Order purchase date, aggregated by calendar month.
+    statuses: [delivered]
+    null_handling: Item prices are required. A delivered order without an item contributes zero and is flagged.
+    sources: [dwd.fact_order, dwd.fact_order_item]
+    sql: ads.ads_executive_dashboard.delivered_gmv_brl
+    limitations: Excludes freight, cancellations, refunds, taxes and costs that cannot be reliably measured from the extract.
+  delivered_order_count:
+    meaning: Number of fulfilled orders.
+    formula: Count of unique delivered order IDs.
+    numerator: Delivered orders.
+    denominator: None.
+    time_dimension: Order purchase month.
+    statuses: [delivered]
+    null_handling: Order ID and status are required. Months with activity and no delivery return zero.
+    sources: [dwd.fact_order]
+    sql: ads.ads_executive_dashboard.delivered_orders
+    limitations: Snapshot status may be corrected after the order month.
+  average_order_value:
+    meaning: Mean fulfilled merchandise value per delivered order.
+    formula: Delivered GMV divided by delivered order count.
+    numerator: Delivered merchandise value in BRL.
+    denominator: Delivered orders.
+    time_dimension: Order purchase month.
+    statuses: [delivered]
+    null_handling: Zero denominator returns NULL.
+    sources: [dwd.fact_order, dwd.fact_order_item]
+    sql: ads.ads_executive_dashboard.average_order_value_brl
+    limitations: Excludes freight and reflects basket value rather than payment tender.
+  cancellation_rate:
+    meaning: Share of observed orders explicitly canceled.
+    formula: Canceled orders divided by all orders.
+    numerator: Distinct orders with status canceled.
+    denominator: All distinct orders including unavailable and in-progress statuses.
+    time_dimension: Order purchase month.
+    statuses: [canceled, all for denominator]
+    null_handling: Order ID and status are required. Zero denominator returns NULL.
+    sources: [dwd.fact_order]
+    sql: ads.ads_executive_dashboard.cancellation_rate
+    limitations: Uses the latest observed status in the supplied extract. Includes no inferred cancel reason.
+  on_time_delivery_rate:
+    meaning: Share of eligible delivered orders received on or before the estimated calendar date.
+    formula: On-time eligible orders divided by all eligible delivered orders.
+    numerator: Orders delivered on or before the estimate date.
+    denominator: Delivered orders with actual and estimate dates and coherent chronology.
+    time_dimension: Order purchase month. Timeliness compares Brazilian-local source calendar dates.
+    statuses: [delivered]
+    null_handling: Missing or inconsistent dates are ineligible. Zero eligible orders returns NULL.
+    sources: [dwd.fact_order, dwd.dim_customer]
+    sql: ads.ads_executive_dashboard.on_time_delivery_rate
+    limitations: Source timestamps are timezone-naive. Regional breakdown uses customer state.
+  average_late_delivery_days:
+    meaning: Calendar days overdue among eligible late deliveries.
+    formula: Sum of positive calendar date differences divided by late eligible orders.
+    numerator: Calendar days after the estimated date.
+    denominator: Eligible delivered orders received after the estimated date.
+    time_dimension: Order purchase month.
+    statuses: [delivered]
+    null_handling: Missing or inconsistent dates are ineligible. Zero late orders returns NULL.
+    sources: [dwd.fact_order, dwd.dim_customer]
+    sql: ads.ads_executive_dashboard.average_late_delivery_days
+    limitations: Calendar days include weekends and holidays. Same-date deliveries are on time.
+  freight_revenue:
+    meaning: Freight charged on delivered orders, used as a reporting proxy for freight revenue.
+    formula: Sum of item-level recorded freight values for delivered orders.
+    numerator: Delivered item freight charges in BRL.
+    denominator: None.
+    time_dimension: Order purchase month.
+    statuses: [delivered]
+    null_handling: Item freight is required. A delivered order without items contributes zero and is flagged.
+    sources: [dwd.fact_order, dwd.fact_order_item]
+    sql: ads.ads_executive_dashboard.freight_revenue_brl
+    limitations: Source has customer-facing charges and provides no carrier costs or accounting recognition.
+  average_review_score:
+    meaning: Mean latest available score across reviewed delivered orders.
+    formula: Sum of latest review scores divided by reviewed delivered orders.
+    numerator: Latest score per delivered order, ranked by answer time, creation time and review ID descending.
+    denominator: Delivered orders with a review.
+    time_dimension: Order purchase month.
+    statuses: [delivered]
+    null_handling: Unreviewed orders are excluded. Zero reviewed orders returns NULL.
+    sources: [dwd.fact_order, dwd.fact_review]
+    sql: ads.ads_executive_dashboard.average_review_score
+    limitations: Nonresponse bias and later reviews can change historical purchase months.
+  repeat_purchase_rate:
+    meaning: Share of buying customers with two or more delivered orders in the same month.
+    formula: Repeat delivered customers divided by delivered customers.
+    numerator: Distinct customer_unique_id values with at least two delivered orders in the purchase month.
+    denominator: Distinct customer_unique_id values with at least one delivered order in that month.
+    time_dimension: Order purchase month.
+    statuses: [delivered]
+    null_handling: Customer identity is required. Zero qualifying customers returns NULL.
+    sources: [dwd.fact_order, dwd.dim_customer, dws.dws_customer_retention]
+    sql: ads.ads_executive_dashboard.repeat_purchase_rate
+    limitations: A within-month operational definition. No cross-month cohorts or lifetime retention.
+  category_sales:
+    meaning: Delivered merchandise value attributable to each product category.
+    formula: Sum of delivered item prices by product category code.
+    numerator: Category delivered merchandise value in BRL.
+    denominator: None.
+    time_dimension: Order purchase month.
+    statuses: [delivered]
+    null_handling: Missing categories use (unknown). Missing translations use the source category.
+    sources: [dwd.fact_order_item, dwd.fact_order, dwd.dim_product]
+    sql: dws.dws_category_performance.category_sales_brl
+    limitations: Category assignment is from the current extract. Order counts can overlap across categories.
+  seller_performance:
+    meaning: Per-seller order volume, cancellation, and delivered merchandise and freight.
+    formula: Count distinct seller/order pairs, divide canceled pairs by all pairs, and sum seller items for delivered GMV.
+    numerator: Canceled pairs for cancellation and seller item prices or freight for delivered amounts.
+    denominator: All seller/order pairs for cancellation. No denominator for counts and amounts.
+    time_dimension: Order purchase month.
+    statuses: [all for volume, canceled for cancellation, delivered for amounts]
+    null_handling: Seller and order identifiers are required. Orders without items have no seller attribution.
+    sources: [dwd.fact_order_item, dwd.fact_order, dwd.dim_seller]
+    sql: ads.ads_seller_scorecard
+    limitations: A multi-seller order counts once per seller. Order-level cancellation does not imply seller fault.
