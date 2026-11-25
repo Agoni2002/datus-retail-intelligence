@@ -54,13 +54,15 @@ class RetailTools:
 
     def execute(self, tool, request_id, started, statement):
         try:
-            _, schema, table = validate_sql(statement, Limits())
+            approved_sql, schema, table = validate_sql(statement, Limits())
             result = query(self.snapshot, statement)
         except UnsafeQuery as error:
             return self.failure(tool, request_id, started, error.code, str(error))
         except Exception:
             return self.failure(tool, request_id, started, "QUERY_UNAVAILABLE",
                                 "The published retail query could not be completed.")
+        if os.getenv("RETAIL_PUBLIC_SQL_EVIDENCE") == "1":
+            result["sql"] = approved_sql
         self.audit_result(tool, request_id, started, "allowed", rows=len(result["rows"]))
         return {"ok": True, "request_id": request_id, "snapshot_version": self.snapshot.stem,
                 "source_table": f"{schema}.{table}", **json.loads(json.dumps(result, default=str, allow_nan=False))}

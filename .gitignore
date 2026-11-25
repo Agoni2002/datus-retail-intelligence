@@ -14,3 +14,10 @@ __pycache__/
 /.datus-runtime/
 /subject/
 /lineage/
+
+/deployment/.runtime/
+/web/frontend/node_modules/
+/web/frontend/dist/
+*.log
+*.duckdb
+*.duckdb.wal

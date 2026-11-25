@@ -1,0 +1,19 @@
+{
+  "name": "retail-intelligence-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {"build": "tsc --noEmit && vite build"},
+  "dependencies": {
+    "@superset-ui/embedded-sdk": "0.3.0",
+    "lucide-react": "0.468.0",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "typescript": "5.9.2",
+    "vite": "6.4.3"
+  }
+}

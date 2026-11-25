@@ -34,9 +34,10 @@ class RestrictedToolSurface(RuntimeError):
 class FencedTransport(Model):
     """Check the final SDK tool surface immediately before each provider call."""
 
-    def __init__(self, transport, trace):
+    def __init__(self, transport, trace, inference_budget=None):
         self.transport = transport
         self.trace = trace
+        self.inference_budget = inference_budget
 
     def __getattr__(self, name):
         return getattr(self.transport, name)
@@ -52,20 +53,30 @@ class FencedTransport(Model):
     async def stream_response(self, system_instructions, input, model_settings, tools, output_schema, handoffs,
                               tracing, **kwargs):
         self.check(tools, handoffs)
+        if self.inference_budget:
+            model_settings = self.inference_budget.settings(system_instructions, input, model_settings, tools)
         async for event in self.transport.stream_response(
             system_instructions, input, model_settings, tools, output_schema, handoffs, tracing, **kwargs
         ):
+            if self.inference_budget and getattr(event, "type", None) == "response.completed":
+                self.inference_budget.record(getattr(event.response, "usage", None))
             yield event
 
     async def get_response(self, system_instructions, input, model_settings, tools, output_schema, handoffs,
                            tracing, **kwargs):
         self.check(tools, handoffs)
-        return await self.transport.get_response(
+        if self.inference_budget:
+            model_settings = self.inference_budget.settings(system_instructions, input, model_settings, tools)
+        response = await self.transport.get_response(
             system_instructions, input, model_settings, tools, output_schema, handoffs, tracing, **kwargs
         )
 
+        if self.inference_budget:
+            self.inference_budget.record(response.usage)
+        return response
 
-def configure(home, snapshot, index_dir, index_id, audit, run_id, offline):
+
+def configure(home, snapshot, index_dir, index_id, audit, run_id, offline, bounded=False):
     template = ROOT / "agents/prompts/retail_analyst_system_1.0.j2"
     target = home / "template"
     target.mkdir()
@@ -76,7 +87,7 @@ def configure(home, snapshot, index_dir, index_id, audit, run_id, offline):
     agent["models"] = {"retail_provider": {
         "type": "openai", "model": os.getenv("RETAIL_MODEL", "gpt-4.1-mini") if not offline else "gpt-4.1-mini",
         "api_key": "offline-testing" if offline else "${OPENAI_API_KEY}",
-        "max_retry": 1,
+        "max_retry": 0 if bounded else 1,
     }}
     agent["agentic_nodes"][NODE]["model"] = "retail_provider"
     agent["services"] = {
@@ -94,6 +105,8 @@ def configure(home, snapshot, index_dir, index_id, audit, run_id, offline):
             "tool_filter": {"allowed_tool_names": sorted(SDK_TOOLS), "enabled": True},
         }},
     }
+    if bounded:
+        agent["services"]["mcp_servers"][SERVER]["env"]["RETAIL_PUBLIC_SQL_EVIDENCE"] = "1"
     path = home / "agent.yml"
     path.write_text(yaml.safe_dump(config, sort_keys=False))
     loaded = load_agent_config(config=str(path), datasource="retail", reload=True)
@@ -121,7 +134,7 @@ def json_object(value):
     return None
 
 
-async def run(question, publication, runtime, transport=None, *, index_report=None, mcp_session=None):
+async def run(question, publication, runtime, transport=None, *, index_report=None, mcp_session=None, inference_budget=None, expected_snapshot=None):
     if transport is None and not os.getenv("OPENAI_API_KEY"):
         raise ValueError("Set OPENAI_API_KEY to run a live Retail Analyst question")
     set_tracing_disabled(True)
@@ -129,6 +142,8 @@ async def run(question, publication, runtime, transport=None, *, index_report=No
     state = publication.latest()
     if state is None:
         raise ValueError("Publish a warehouse snapshot first")
+    if expected_snapshot is not None and state["version"] != expected_snapshot:
+        raise ValueError("The requested published snapshot changed")
     snapshot = publication.directory / state["database"]
     runtime = runtime.resolve()
     runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -143,7 +158,7 @@ async def run(question, publication, runtime, transport=None, *, index_report=No
     with TemporaryDirectory(prefix="session-", dir=runtime) as temporary:
         cfg = configure(Path(temporary), snapshot, index_dir, index["index_id"], audit,
                         mcp_session.id if mcp_session else run_id,
-                        transport is not None)
+                        transport is not None, bounded=inference_budget is not None)
         node = Node.new_instance(
             node_id=NODE, description="Guarded retail analytics", node_type=NodeType.TYPE_GEN_SQL,
             input_data=GenSQLNodeInput(user_message=question, workspace_root=str(ROOT), db_schema="ads"),
@@ -160,7 +175,9 @@ async def run(question, publication, runtime, transport=None, *, index_report=No
         model.supports_builtin_web_fetch = lambda: False
         adapter = model.litellm_adapter
         provider = adapter.get_agents_sdk_model
-        adapter.get_agents_sdk_model = lambda: FencedTransport(transport if transport is not None else provider(), trace)
+        adapter.get_agents_sdk_model = lambda: FencedTransport(
+            transport if transport is not None else provider(), trace, inference_budget
+        )
         try:
             async for action in node.execute_stream():
                 if str(action.role).upper() != "TOOL":

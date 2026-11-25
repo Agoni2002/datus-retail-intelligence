@@ -1,0 +1,60 @@
+{
+	admin off
+	auto_https off
+}
+
+:8090 {
+	bind 127.0.0.1
+	request_body {
+		max_size 128KB
+	}
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		X-Frame-Options SAMEORIGIN
+	}
+	route {
+		@api path /api/health /api/public/* /api/superset/guest-token /api/ai/*
+		handle @api {
+			reverse_proxy 127.0.0.1:8091 {
+				header_up X-Retail-Client {http.request.header.CF-Connecting-IP}
+				transport http {
+					dial_timeout 3s
+					response_header_timeout 65s
+				}
+			}
+		}
+		@embedded path /embedded/* /api/v1/* /superset/log/*
+		handle @embedded {
+			rewrite * /bi-proxy{uri}
+			reverse_proxy 127.0.0.1:8091 {
+				transport http {
+					dial_timeout 3s
+					response_header_timeout 35s
+				}
+			}
+		}
+		@supersetStatic {
+			path /static/assets/* /static/appbuilder/css/flags/*
+			method GET HEAD
+		}
+		handle @supersetStatic {
+			reverse_proxy 127.0.0.1:8088 {
+				header_up -Cookie
+				header_up -Authorization
+				header_up -X-GuestToken
+				header_down -Set-Cookie
+			}
+		}
+		@web path / /analytics /analyst /quality /data /assets/*
+		handle @web {
+			header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-src 'self'; frame-ancestors 'self'; connect-src 'self'; form-action 'self'; object-src 'none'; base-uri 'none'"
+			root * /srv/demo
+			try_files {path} /index.html
+			file_server
+		}
+		respond 404
+	}
+}

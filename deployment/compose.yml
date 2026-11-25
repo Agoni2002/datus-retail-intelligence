@@ -1,0 +1,23 @@
+name: retail-public-demo
+services:
+  gateway:
+    image: caddy:2.10.2-alpine
+    network_mode: host
+    restart: unless-stopped
+    mem_limit: 128m
+    read_only: true
+    tmpfs: [/data, /config]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../web/frontend/dist:/srv/demo:ro
+  tunnel:
+    image: cloudflare/cloudflared:2025.11.1
+    network_mode: host
+    restart: unless-stopped
+    mem_limit: 160m
+    command: [tunnel, --no-autoupdate, --protocol, http2, --metrics, "127.0.0.1:20241", --url, "http://127.0.0.1:8090"]
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"

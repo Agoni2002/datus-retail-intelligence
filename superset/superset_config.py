@@ -22,3 +22,14 @@ FEATURE_FLAGS = {
     "ENABLE_TEMPLATE_PROCESSING": False,
     "DASHBOARD_NATIVE_FILTERS": True,
 }
+
+# Enable the restricted guest surface only when the public deployment has a key.
+from pathlib import Path
+
+demo_key = Path("/app/retail/runtime/demo-signing-key")
+if demo_key.is_file():
+    FEATURE_FLAGS.update(EMBEDDED_SUPERSET=True, DASHBOARD_RBAC=True)
+    GUEST_ROLE_NAME = "RetailDemoRole"
+    GUEST_TOKEN_JWT_SECRET = demo_key.read_text().strip()
+    GUEST_TOKEN_JWT_AUDIENCE = "retail-demo"
+    GUEST_TOKEN_JWT_EXP_SECONDS = 180

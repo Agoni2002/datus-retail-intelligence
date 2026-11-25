@@ -1,6 +1,34 @@
-# Datus Retail Data Intelligence
+# Datus Retail Intelligence
 
-A DuckDB warehouse for sales and fulfillment analysis over the Olist e-commerce extract. Phase 1A includes a synthetic warehouse, deterministic quality gates, incremental source refresh, immutable publication, a guarded query interface, and a Datus datasource smoke test.
+A portfolio application for analyzing the Brazilian Olist marketplace. It combines a reproducible DuckDB warehouse, six interactive Superset dashboards, and a Datus Retail Analyst that runs governed analytical queries through MCP.
+
+## Architecture
+
+```text
+Olist CSVs → ODS → DWD → DWS → ADS → immutable DuckDB publication
+                                      ├─ Superset + PostgreSQL metadata
+                                      └─ Datus Agent → Agents SDK → stdio MCP → SQL Guard
+Cloudflare HTTPS → Caddy → React / FastAPI → approved Superset embeds and analytical APIs
+```
+
+React and TypeScript with Vite provide the public interface. FastAPI serves approved aggregates and short-lived, dashboard-scoped Superset guest tokens. PostgreSQL stores Superset metadata on its internal network. See the [public demo runbook](docs/public_demo.md) for the active endpoint and local deployment procedure.
+
+The [SQL Guard](docs/retail_analyst.md) restricts the MCP surface to permitted queries against the current immutable warehouse. The public API accepts natural-language questions only. Live inference is available only with configured provider credentials, model pricing, and usage limits.
+
+## Dashboards
+
+| Dashboard | Focus |
+| --- | --- |
+| Executive Overview | GMV, orders, order value, cancellation, delivery and reviews |
+| Product & Category | Category ranking, market contribution and sales trends |
+| Seller Performance | Seller order participation, delivered value, freight and cancellation |
+| Delivery & Fulfillment | Delivery eligibility, lateness and regional performance |
+| Customer & Review | Same-month repeat purchase, basket bands and review scores |
+| Data Quality & Governance | Validation results, warehouse counts and coverage gaps |
+
+The verified full Olist run processed 1,550,922 source rows in 45.07 seconds on the project VM and produced a 183.76 MiB DuckDB snapshot. Validation recorded 132 checks, 0 blockers and 5 warnings. Late extract months have sparse coverage, and timestamps, payment reconciliation and geography have documented limitations. See the [warehouse quality notes](docs/data_quality.md) and [BI runbook](docs/superset_bi.md).
+
+Original Olist CSVs, generated databases, credentials and local verification artifacts are excluded from this repository.
 
 ## Run on the synthetic data
 
