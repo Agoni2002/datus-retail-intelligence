@@ -74,7 +74,7 @@ def configure_embeddings(origin, provision):
 def summary(receipt):
     _, engine = warehouse(receipt)
     with engine.connect() as conn:
-        coverage, panels = governance(conn, receipt)
+        coverage, panels = governance(conn, receipt, chinese=True)
         metrics = conn.exec_driver_sql("""
             SELECT SUM(delivered_gmv_brl)::DOUBLE, SUM(delivered_orders)::INTEGER,
                    SUM(delivered_gmv_brl) / NULLIF(SUM(delivered_orders),0),
@@ -94,6 +94,7 @@ def summary(receipt):
     engine.dispose()
     quality = receipt["quality"]["checks"]
     return {
+        "governancePanels": list(panels),
         "overview": {"metrics": {key: float(value) for key, value in zip(keys, metrics)},
                      "monthly": [list(row) for row in monthly], "coverage": list(scope), "coverageNote": coverage,
                      "version": receipt["version"],

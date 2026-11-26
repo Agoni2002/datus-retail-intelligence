@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 
-def governance(conn, receipt):
+def governance(conn, receipt, *, chinese=False):
     def rows(sql):
         return conn.exec_driver_sql(sql).all()
 
@@ -70,6 +70,34 @@ def governance(conn, receipt):
     if not tail_delivered:
         coverage += " Treat these edge months as sparse extract coverage."
     layer_text = "\n".join(f"| {name.upper()} | {n} | {count:,} |" for name, (n, count) in totals.items())
+    if chinese:
+        months = "和".join(f"{month.year} 年 {month.month} 月" for month, *_ in tail)
+        coverage = (f"下单日期覆盖 {start} 至 {end}。{months}合计 "
+                    f"{sum(row[1] for row in tail):,} 笔订单，其中 {tail_delivered:,} 笔已交付。")
+        if not tail_delivered:
+            coverage += "这两个月的数据覆盖较少，解读趋势时请留意。"
+        statuses = {"delivered": "已交付", "shipped": "已发货", "unavailable": "无法履约",
+                    "canceled": "已取消", "invoiced": "已开票", "processing": "处理中",
+                    "approved": "已批准", "created": "已创建"}
+        anomaly_counts = "、".join(f"{statuses.get(status, status)} {count:,} 笔"
+                                   for status, count in anomalies.items())
+        summary = f"""### 已发布快照
+
+**{source_rows:,} 条源记录** · **{len(checks)} 项检查** · **{len(blockers)} 个阻断** · **{len(warnings)} 条警告**
+
+版本 `{receipt['version']}`，发布时间 {time:%Y-%m-%d %H:%M:%S}（UTC，取自发布清单）。
+
+| 分层 | 表数 | 行数 |
+| --- | ---: | ---: |
+{layer_text}"""
+        limitations = f"""### 已知数据限制
+
+- 地理数据包含 {violations('geolocation.duplicate_key_rows'):,} 条完全重复的记录。{customer_zip:,} 位客户和 {seller_zip:,} 位卖家无法匹配地理位置。{category_gaps:,} 件商品缺少类别翻译。
+- 发现 {violations('orders.timeline'):,} 笔订单的时间戳异常（{anomaly_counts}）。另有 {missing_delivery:,} 笔已交付订单缺少实际交付时间。准时率统计排除了 {excluded:,} 笔已交付订单。
+- 付款对账发现 {violations('reconciliation.payment_values'):,} 笔已交付订单需要关注，其中 {missing_pay:,} 笔缺少付款记录，{amount_diff:,} 笔差额超过 0.02 巴西雷亚尔。
+- 最新评价日期为 {review_end}，比最晚下单日期早 {(end-review_end).days} 天。"""
+        return coverage, (summary, limitations)
+
     summary = f"""### Published snapshot
 
 **{source_rows:,} source rows** · **{len(checks)} checks** · **{len(blockers)} blockers** · **{len(warnings)} warnings**

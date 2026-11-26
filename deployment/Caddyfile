@@ -16,7 +16,7 @@
 		X-Frame-Options SAMEORIGIN
 	}
 	route {
-		@api path /api/health /api/public/* /api/superset/guest-token /api/ai/*
+		@api path /api/health /api/public/* /api/superset/guest-token /api/ai/* /superset/language_pack/zh/
 		handle @api {
 			reverse_proxy 127.0.0.1:8091 {
 				header_up X-Retail-Client {http.request.header.CF-Connecting-IP}

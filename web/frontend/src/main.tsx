@@ -22,19 +22,43 @@ import { embedDashboard } from "@superset-ui/embedded-sdk";
 import "./style.css";
 
 const navigation = [
-  { path: "/", label: "Overview", icon: LayoutDashboard },
-  { path: "/analytics", label: "Business Analytics", icon: BarChart3 },
-  { path: "/analyst", label: "AI Analyst", icon: Sparkles },
-  { path: "/quality", label: "Data Quality", icon: ShieldCheck },
-  { path: "/data", label: "Data Management", icon: Database },
+  { path: "/", label: "概览", icon: LayoutDashboard },
+  { path: "/analytics", label: "经营分析", icon: BarChart3 },
+  { path: "/analyst", label: "AI 分析师", icon: Sparkles },
+  { path: "/quality", label: "数据质量", icon: ShieldCheck },
+  { path: "/data", label: "数据管理", icon: Database },
 ];
-const fmt = new Intl.NumberFormat("en-US");
-const money = new Intl.NumberFormat("en-US", {
+const sourceNames: Record<string, string> = {
+  customers: "客户",
+  geolocation: "地理位置",
+  order_items: "订单明细",
+  order_payments: "订单付款",
+  order_reviews: "订单评价",
+  orders: "订单",
+  products: "商品",
+  sellers: "卖家",
+  product_category_name_translation: "商品类别翻译",
+};
+const metricNames: Record<string, string> = {
+  delivered_gmv: "已交付商品交易额",
+  delivered_order_count: "已交付订单数",
+  average_order_value: "平均客单价",
+  cancellation_rate: "订单取消率",
+  on_time_delivery_rate: "准时交付率",
+  average_late_delivery_days: "平均延迟交付天数",
+  freight_revenue: "运费收入",
+  average_review_score: "平均评价分",
+  repeat_purchase_rate: "同月复购率",
+  category_sales: "类别销售额",
+  seller_performance: "卖家表现",
+};
+const fmt = new Intl.NumberFormat("zh-CN");
+const money = new Intl.NumberFormat("zh-CN", {
   style: "currency",
   currency: "BRL",
   currencyDisplay: "code",
 });
-const pct = new Intl.NumberFormat("en-US", {
+const pct = new Intl.NumberFormat("zh-CN", {
   style: "percent",
   maximumFractionDigits: 4,
 });
@@ -87,12 +111,19 @@ async function api<T>(path: string, body?: object): Promise<T> {
         }
       : {},
   );
-  const result = await response.json();
+  const result = await response.json().catch(() => null);
   if (!response.ok)
     throw new Error(
-      typeof result.detail === "string"
-        ? result.detail
-        : "The request could not be completed.",
+      (
+        {
+          403: "没有权限执行此操作。",
+          413: "提交的内容过长。",
+          422: "请检查提交的内容。",
+          429: "请求次数已达上限，请稍后重试。",
+          503: "服务暂不可用，请稍后重试。",
+          504: "分析超时，请重试。",
+        } as Record<number, string>
+      )[response.status] ?? "请求未能完成，请稍后重试。",
     );
   return result as T;
 }
@@ -110,7 +141,15 @@ function Resource<T>({
     let current = true;
     api<T>(endpoint)
       .then((value) => current && setData(value))
-      .catch((cause) => current && setError(cause.message));
+      .catch(
+        (cause) =>
+          current &&
+          setError(
+            cause instanceof Error && !(cause instanceof TypeError)
+              ? cause.message
+              : "数据加载失败，请重试。",
+          ),
+      );
     return () => {
       current = false;
     };
@@ -122,7 +161,7 @@ function Resource<T>({
   ) : data ? (
     children(data)
   ) : (
-    <p role="status">Loading published data…</p>
+    <p role="status">正在加载已发布的数据…</p>
   );
 }
 
@@ -169,25 +208,25 @@ function MonthlyChart({ monthly }: { monthly: Overview["monthly"] }) {
     <section className="panel monthly">
       <div className="panel-header">
         <div>
-          <h2>Monthly performance</h2>
-          <p>Purchase month · delivered orders</p>
+          <h2>月度经营表现</h2>
+          <p>按下单月份统计已交付订单</p>
         </div>
         <div className="segmented">
           <button aria-pressed={mode === "gmv"} onClick={() => setMode("gmv")}>
-            GMV
+            交易额
           </button>
           <button
             aria-pressed={mode === "orders"}
             onClick={() => setMode("orders")}
           >
-            Orders
+            订单量
           </button>
         </div>
       </div>
       <div
         className="plot"
         aria-label={
-          mode === "gmv" ? "Monthly delivered GMV" : "Monthly delivered orders"
+          mode === "gmv" ? "月度已交付商品交易额" : "月度已交付订单数"
         }
       >
         {monthly.map((row) => (
@@ -230,54 +269,54 @@ function OverviewPage() {
   return (
     <>
       <Heading
-        title="Marketplace overview"
-        description="Fulfillment and commercial performance from the published Olist warehouse."
+        title="电商经营概览"
+        description="基于已发布的 Olist 数据仓库查看销售和履约表现。"
       />
       <Resource<Overview> endpoint="/api/public/overview">
         {(data) => (
           <>
             <div className="stats">
               <Stat
-                label="Delivered GMV"
+                label="已交付商品交易额"
                 value={money.format(data.metrics.gmv)}
-                note="Merchandise value, excluding freight"
+                note="商品金额，不含运费"
               />
               <Stat
-                label="Delivered orders"
+                label="已交付订单数"
                 value={fmt.format(data.metrics.orders)}
-                note="Orders marked delivered"
+                note="状态为已交付的订单"
               />
               <Stat
-                label="Average order value"
+                label="平均客单价"
                 value={money.format(data.metrics.aov)}
-                note="GMV per delivered order"
+                note="已交付商品交易额 ÷ 已交付订单数"
               />
               <Stat
-                label="Cancellation rate"
+                label="订单取消率"
                 value={pct.format(data.metrics.cancellation)}
-                note="Share of all observed orders"
+                note="占全部订单的比例"
               />
               <Stat
-                label="On-time delivery"
+                label="准时交付率"
                 value={pct.format(data.metrics.onTime)}
-                note="Eligible delivered orders"
+                note="以符合统计条件的已交付订单为基数"
               />
               <Stat
-                label="Average review score"
+                label="平均评价分"
                 value={data.metrics.review.toFixed(4)}
-                note="Latest review per delivered order"
+                note="采用每笔已交付订单的最新评价"
               />
             </div>
             <MonthlyChart monthly={data.monthly} />
             <div className="grid-two">
               <section className="panel">
-                <h2>Source coverage</h2>
+                <h2>数据覆盖范围</h2>
                 <p>{data.coverageNote}</p>
               </section>
               <section className="panel">
-                <h2>Published snapshot</h2>
+                <h2>已发布快照</h2>
                 <p className="mono">{data.version}</p>
-                <a href="/quality">{data.warningCount} quality warnings</a>
+                <a href="/quality">查看 {data.warningCount} 条质量警告</a>
               </section>
             </div>
           </>
@@ -320,9 +359,11 @@ function DashboardFrame({ dashboard }: { dashboard: Dashboard }) {
             return;
           }
           detach = () => embedded.unmount();
+          const frame = mount.current?.querySelector("iframe");
+          if (frame) frame.title = dashboard.title;
           setReady(true);
         })
-        .catch((cause) => current && setError(cause.message));
+        .catch(() => current && setError("仪表板加载失败，请刷新后重试。"));
     }
     return () => {
       current = false;
@@ -332,7 +373,7 @@ function DashboardFrame({ dashboard }: { dashboard: Dashboard }) {
   return (
     <>
       {!ready && (
-        <p role={error ? "alert" : "status"}>{error || "Opening dashboard…"}</p>
+        <p role={error ? "alert" : "status"}>{error || "正在打开仪表板…"}</p>
       )}
       <div className="embed" ref={mount} aria-label={dashboard.title} />
     </>
@@ -344,7 +385,7 @@ function Analytics({ dashboards }: { dashboards: Dashboard[] }) {
   const active = dashboards.find((dashboard) => dashboard.slug === selected);
   return (
     <>
-      <div className="tabs" aria-label="Dashboards">
+      <div className="tabs" aria-label="仪表板">
         {dashboards.map((dashboard) => (
           <button
             key={dashboard.slug}
@@ -364,19 +405,19 @@ function DataQuality() {
   return (
     <>
       <Heading
-        title="Data quality"
-        description="Validation results and known limitations for the current publication."
+        title="数据质量"
+        description="查看当前快照的校验结果和已知数据限制。"
       />
       <Resource<Quality> endpoint="/api/public/quality">
         {(data) => (
           <>
             <div className="stats three">
-              <Stat label="Quality checks" value={data.checks} />
-              <Stat label="Blocking errors" value={data.blockers} />
-              <Stat label="Warnings" value={data.warnings} />
+              <Stat label="质量检查项" value={data.checks} />
+              <Stat label="阻断错误" value={data.blockers} />
+              <Stat label="警告" value={data.warnings} />
             </div>
             <section className="panel findings">
-              <h2>Known limitations</h2>
+              <h2>已知数据限制</h2>
               {data.findings.map((finding) => (
                 <div key={finding}>
                   <CircleAlert size={19} aria-hidden="true" />
@@ -385,7 +426,7 @@ function DataQuality() {
               ))}
             </section>
             <section className="panel">
-              <h2>Source coverage</h2>
+              <h2>数据覆盖范围</h2>
               <p>{data.coverage}</p>
             </section>
           </>
@@ -430,52 +471,57 @@ function DataManagement() {
   return (
     <>
       <Heading
-        title="Data management"
-        description="Publication metadata, warehouse coverage and metric definitions."
+        title="数据管理"
+        description="查看发布信息、数据仓库覆盖范围和指标口径。"
       />
       <Resource<Snapshot> endpoint="/api/public/snapshot">
         {(data) => (
           <>
             <section className="panel">
-              <h2>Current publication</h2>
+              <h2>当前发布版本</h2>
               <dl className="metadata">
-                <dt>Version</dt>
+                <dt>版本</dt>
                 <dd>{data.version}</dd>
                 <dt>SHA-256</dt>
                 <dd>{data.sha256}</dd>
-                <dt>Published</dt>
-                <dd>{new Date(data.published).toUTCString()}</dd>
-                <dt>Purchase coverage</dt>
-                <dd>{data.coverage.join(" to ")}</dd>
-                <dt>Size</dt>
+                <dt>发布时间</dt>
+                <dd>
+                  {new Date(data.published).toLocaleString("zh-CN", {
+                    timeZone: "Asia/Shanghai",
+                    hour12: false,
+                  }) + "（北京时间）"}
+                </dd>
+                <dt>下单日期范围</dt>
+                <dd>{data.coverage.join(" 至 ")}</dd>
+                <dt>快照大小</dt>
                 <dd>{(data.size / 1048576).toFixed(2)} MiB</dd>
               </dl>
             </section>
             <div className="grid-two">
               <section className="panel">
-                <h2>Source row counts</h2>
+                <h2>源数据行数</h2>
                 <DataTable
-                  headings={["Source", "Rows"]}
+                  headings={["来源", "行数"]}
                   rows={data.sources.map(([name, rows]) => [
-                    name.replaceAll("_", " "),
+                    sourceNames[name] ?? name,
                     fmt.format(rows),
                   ])}
                 />
               </section>
               <section className="panel">
-                <h2>Warehouse layers</h2>
+                <h2>数据仓库分层</h2>
                 <DataTable
-                  headings={["Layer", "Tables", "Rows"]}
+                  headings={["分层", "表数", "行数"]}
                   rows={data.layers}
                 />
               </section>
             </div>
             <section className="panel">
-              <h2>Metric definitions</h2>
+              <h2>指标口径</h2>
               <div className="definitions">
                 {Object.entries(data.metrics).map(([name, metric]) => (
                   <details key={name}>
-                    <summary>{name.replaceAll("_", " ")}</summary>
+                    <summary>{metricNames[name] ?? name}</summary>
                     <p>{metric.meaning}</p>
                     <p>{metric.formula}</p>
                     <p className="muted">{metric.limitations}</p>
@@ -522,19 +568,26 @@ function Analyst({ status }: { status: Status }) {
     <>
       <p className="notice" role="status">
         <LockKeyhole size={18} />
-        {status.message}
+        {status.enabled
+          ? "实时分析已启用。"
+          : "实时 AI 尚未配置。你仍可查看经营分析和数据质量。"}
       </p>
       <div className="turns">
         {turns.map((turn, i) => (
           <section className="panel" key={i}>
-            <h2>Your question</h2>
+            <h2>你的问题</h2>
             <p>{turn.question}</p>
             {turn.error && <p role="alert">{turn.error}</p>}
             {turn.answer && (
               <>
-                <h2>Analyst response</h2>
+                <h2>分析结果</h2>
                 <p>{turn.answer.answer}</p>
-                <p>Source metrics · {turn.answer.metric_ids.join(", ")}</p>
+                <p>
+                  参考指标 ·{" "}
+                  {turn.answer.metric_ids
+                    .map((id) => metricNames[id] ?? id)
+                    .join("、")}
+                </p>
                 {turn.answer.evidence.map((item, j) => (
                   <div key={j}>
                     {item.sql && <pre>{item.sql}</pre>}
@@ -549,23 +602,23 @@ function Analyst({ status }: { status: Status }) {
               </>
             )}
             {!turn.answer && !turn.error && (
-              <p role="status">Running guarded analysis…</p>
+              <p role="status">正在通过受控查询分析…</p>
             )}
           </section>
         ))}
       </div>
       <form className="panel ask" onSubmit={ask}>
-        <label htmlFor="question">Question</label>
+        <label htmlFor="question">问题</label>
         <textarea
           id="question"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           maxLength={4000}
           disabled={!status.enabled || pending}
-          placeholder="What was delivered GMV by purchase month?"
+          placeholder="每个下单月份的已交付商品交易额是多少？"
         />
         <button disabled={!status.enabled || pending || !question.trim()}>
-          <Send size={16} /> Send question
+          <Send size={16} /> 发送问题
         </button>
       </form>
     </>
@@ -580,8 +633,8 @@ function App() {
     current.path === "/analytics" ? (
       <>
         <Heading
-          title="Business analytics"
-          description="Explore six interactive dashboards connected to the published warehouse."
+          title="经营分析"
+          description="通过六个交互式仪表板探索已发布的仓库数据。"
         />
         <Resource<Dashboard[]> endpoint="/api/public/dashboards">
           {(dashboards) => <Analytics dashboards={dashboards} />}
@@ -590,8 +643,8 @@ function App() {
     ) : current.path === "/analyst" ? (
       <>
         <Heading
-          title="AI analyst"
-          description="Ask questions about the warehouse through the guarded Retail Analyst."
+          title="AI 分析师"
+          description="用自然语言提问，由零售分析师通过受控查询访问数据仓库。"
         />
         <Resource<Status> endpoint="/api/ai/status">
           {(status) => <Analyst status={status} />}
@@ -612,10 +665,10 @@ function App() {
             <Box size={22} />
           </span>
           <div>
-            Datus <small>Retail Intelligence</small>
+            Datus <small>零售数据分析</small>
           </div>
         </a>
-        <nav aria-label="Main navigation">
+        <nav aria-label="主导航">
           {navigation.map(({ path, label, icon: Icon }) => (
             <a
               key={path}
@@ -628,14 +681,14 @@ function App() {
           ))}
         </nav>
         <div className="side-foot">
-          <LockKeyhole size={16} /> Read-only portfolio demo
+          <LockKeyhole size={16} /> 只读演示
         </div>
       </aside>
       <div className="workspace">
         <div className="topbar">
           <span>{current.label}</span>
           <span className="publication">
-            <Activity size={16} /> Olist warehouse
+            <Activity size={16} /> Olist 数据仓库
           </span>
         </div>
         <main id="main">{page}</main>

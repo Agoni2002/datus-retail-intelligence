@@ -1,0 +1,44 @@
+delivered_gmv:
+  meaning: 已交付订单对应的商品交易金额。
+  formula: 先按订单汇总商品售价，再对已交付订单求和。
+  limitations: 不含运费、取消订单、退款，以及无法从源数据可靠计算的税费和成本。
+delivered_order_count:
+  meaning: 已履约并交付的订单数。
+  formula: 对状态为已交付的订单 ID 去重计数。
+  limitations: 订单状态可能在下单月份之后更新。
+average_order_value:
+  meaning: 每笔已交付订单的平均商品金额。
+  formula: 已交付商品交易额除以已交付订单数。
+  limitations: 不含运费，反映商品篮子金额，和实际付款金额可能不同。
+cancellation_rate:
+  meaning: 明确标记为已取消的订单占比。
+  formula: 已取消的去重订单数除以全部去重订单数。
+  limitations: 使用快照中的最新订单状态，源数据未提供取消原因。
+on_time_delivery_rate:
+  meaning: 在预计日期或之前收到货的合格已交付订单占比。
+  formula: 准时交付订单数除以时间戳满足统计条件的已交付订单数。
+  limitations: 源时间戳没有时区信息，区域统计按客户所在州划分。
+average_late_delivery_days:
+  meaning: 已逾期的合格交付订单平均晚到多少天。
+  formula: 正的逾期天数之和除以符合统计条件的逾期订单数。
+  limitations: 按自然日计算，包含周末和节假日。实际日期和预计日期相同视为准时。
+freight_revenue:
+  meaning: 已交付订单向客户收取的运费，作为运费收入的统计代理值。
+  formula: 汇总已交付订单各商品明细的运费。
+  limitations: 数据不包含承运成本，也不代表会计确认收入。
+average_review_score:
+  meaning: 有评价的已交付订单的平均最新评分。
+  formula: 每笔订单保留最新评价，再用评分之和除以有评价的订单数。
+  limitations: 未评价可能带来偏差，后续新增评价可能改变历史月份的结果。
+repeat_purchase_rate:
+  meaning: 同一月份有两笔或以上已交付订单的客户占比。
+  formula: 同月有至少两笔已交付订单的去重客户数除以同月有至少一笔的去重客户数。
+  limitations: 仅衡量同月内复购，不涵盖跨月或生命周期留存。
+category_sales:
+  meaning: 按商品类别归属的已交付商品交易额。
+  formula: 按商品类别汇总已交付订单中的商品售价。
+  limitations: 类别以快照为准，一笔订单可能包含多个类别。
+seller_performance:
+  meaning: 按卖家统计订单量、取消率、已交付商品额和运费。
+  formula: 按卖家与订单的组合去重，按组合计算取消率，并汇总卖家的已交付商品金额与运费。
+  limitations: 多卖家订单会分别计入各卖家，订单取消不代表由卖家造成。

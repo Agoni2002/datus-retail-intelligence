@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
 from .ai import Analyst
+from .zh import DASHBOARD_TITLES, dashboard_payload, embedded_shell, language_pack
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "deployment/.runtime"
@@ -93,11 +94,14 @@ def public_section(section: str):
         raise HTTPException(404, "Unknown section")
     content = data()[section]
     if section == "dashboards":
-        return [{"slug": slug, "uuid": value["uuid"], "title": value["title"]} for slug, value in content.items()]
+        return [{"slug": slug, "uuid": value["uuid"], "title": DASHBOARD_TITLES[slug]} for slug, value in content.items()]
     if section == "snapshot":
         metrics = yaml.safe_load((ROOT / "metrics/definitions.yml").read_text())["metrics"]
-        content["metrics"] = {key: {field: metric[field] for field in ("meaning", "formula", "limitations")}
-                              for key, metric in metrics.items()}
+        chinese = yaml.safe_load(Path(__file__).with_name("metrics.zh-CN.yml").read_text())
+        content["metrics"] = {
+            key: chinese.get(key, {field: metric[field] for field in ("meaning", "formula", "limitations")})
+            for key, metric in metrics.items()
+        }
     return content
 
 
@@ -209,9 +213,15 @@ def check_chart(payload, scope):
             raise HTTPException(422, "Invalid chart row limit")
 
 
+@APP.get("/superset/language_pack/zh/")
+def embedded_language_pack():
+    return language_pack()
+
+
 @APP.api_route("/bi-proxy/{path:path}", methods=["GET", "POST"])
 async def superset_proxy(request: Request, path: str):
-    dashboards = data()["dashboards"]
+    publication = data()
+    dashboards = publication["dashboards"]
     headers = {"Cookie": ""}
     content = None
     if re.fullmatch(rf"embedded/{UUID}/?", path) and request.method == "GET":
@@ -266,7 +276,14 @@ async def superset_proxy(request: Request, path: str):
                     raise HTTPException(502, "Embedded response exceeds the demo limit")
     except httpx.RequestError:
         raise HTTPException(502, "Analytics service unavailable") from None
-    if path.rstrip("/") == "api/v1/chart/data":
+    if path.startswith("embedded/"):
+        payload = embedded_shell(bytes(payload))
+    elif path.startswith("api/v1/dashboard/"):
+        document = json.loads(payload)
+        slug = next(key for key, item in dashboards.items() if item["id"] == scope["id"])
+        dashboard_payload(document, path, slug, publication)
+        payload = json.dumps(document).encode()
+    elif path.rstrip("/") == "api/v1/chart/data":
         document = json.loads(payload)
         for result in document.get("result", []):
             if result.get("error") or result.get("stacktrace"):
